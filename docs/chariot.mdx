@@ -1,0 +1,183 @@
+---
+title: "Chariot Text-to-Speech"
+sidebarTitle: "Chariot"
+description: "ChariotTTSService streams Indian-language and English speech from Chariot's WebSocket API."
+---
+
+import { CommunityMaintained } from "/snippets/community-maintained.mdx";
+
+<CommunityMaintained
+  maintainer="Chariot-AI"
+  maintainerUrl="https://github.com/Chariot-AI"
+  repo="https://github.com/Chariot-AI/pipecat-chariot"
+/>
+
+## Overview
+
+`ChariotTTSService` synthesizes speech using [Chariot](https://chariot.in), which
+serves lifelike voices for Indian languages and English.
+
+The service keeps one WebSocket open across turns and streams audio as it
+arrives. Any voice speaks any supported language, so the audio follows the text
+rather than the voice, and there is no language parameter to set.
+
+<CardGroup cols={2}>
+  <Card
+    title="Source Repository"
+    icon="github"
+    href="https://github.com/Chariot-AI/pipecat-chariot"
+  >
+    Package source, the voice example, and issue tracker
+  </Card>
+  <Card
+    title="PyPI Package"
+    icon="cube"
+    href="https://pypi.org/project/pipecat-chariot/"
+  >
+    The `pipecat-chariot` package on PyPI
+  </Card>
+  <Card title="Chariot" icon="book" href="https://docs.chariot.in/api-reference/introduction">
+    API reference, voices, and supported languages
+  </Card>
+  <Card title="API Keys" icon="key" href="https://platform.chariot.in">
+    Create an account and manage your Chariot API keys
+  </Card>
+</CardGroup>
+
+## Installation
+
+Install the community package. It is published separately from `pipecat-ai`:
+
+```bash
+uv add pipecat-chariot
+```
+
+## Prerequisites
+
+### Account and API key
+
+1. Create an account at [platform.chariot.in](https://platform.chariot.in). New accounts include free credits.
+2. Copy an API key from the console.
+
+Set it in the environment:
+
+```bash
+export CHARIOT_API_KEY="your-api-key"
+```
+
+### Voices
+
+List available voices with `GET https://api.chariot.in/v1/voices`. A voice id is
+optional: without one the service uses a Chariot stock voice, so the example
+runs on the API key alone.
+
+```bash
+export CHARIOT_VOICE_ID="your-voice-uuid"
+```
+
+## Configuration
+
+<ParamField path="api_key" type="str" default="None">
+  Chariot API key. If omitted, the service reads `CHARIOT_API_KEY`.
+</ParamField>
+
+<ParamField path="voice_id" type="str" default="None">
+  Voice UUID from `GET /v1/voices`. `settings.voice` takes precedence. Defaults
+  to a Chariot stock voice when neither is given.
+</ParamField>
+
+<ParamField path="base_url" type="str" default="wss://api.chariot.in">
+  Override this only for a non-production Chariot endpoint.
+</ParamField>
+
+<ParamField path="sample_rate" type="int" default="44100">
+  Output rate in Hz. Chariot streams 44.1 kHz; the rate declared by the server
+  is applied to every audio frame, and a mismatch logs a warning.
+</ParamField>
+
+<ParamField path="model" type="str" default="None">
+  Chariot TTS model. Leave unset to use your account default, so a newly
+  released model works without upgrading the package. `settings.model` takes
+  precedence.
+</ParamField>
+
+<ParamField path="speed" type="float" default="None">
+  Speaking rate, one of the speeds this voice supports under this model.
+  `GET /v1/voices` lists them per voice as `speeds`. Leave unset for the voice
+  as recorded. `settings.speed` takes precedence.
+</ParamField>
+
+<ParamField path="optimize_streaming_latency" type="int" default="0">
+  Latency optimization level from `0` to `4`. `0` applies all quality passes;
+  higher values trade quality passes for lower latency.
+</ParamField>
+
+### Settings
+
+Pass these through `ChariotTTSService.Settings(...)`. They can also be updated
+while the pipeline is running with `TTSUpdateSettingsFrame`.
+
+| Parameter | Type    | Default             | Description                                  |
+| --------- | ------- | ------------------- | -------------------------------------------- |
+| `voice`   | `str`   | stock voice         | Voice UUID.                                  |
+| `model`   | `str`   | account default     | Chariot TTS model.                           |
+| `speed`   | `float` | voice as recorded   | One of the speeds the voice supports.        |
+
+<Note>
+  Each voice supports a set of speeds under each model, commonly `0.5`, `0.75`,
+  `0.9`, `1.1`, `1.25` and `1.5`. `GET /v1/voices` lists what a given voice
+  supports.
+</Note>
+
+<Note>
+  Voice, model and speed are fixed for the life of a session, so changing any of
+  them reconnects, which the service handles for you.
+</Note>
+
+<Note>
+  There is no language setting. Any Chariot voice speaks any supported language,
+  so the language of the audio follows the text you send.
+</Note>
+
+## Usage
+
+```python
+import os
+
+from pipecat.pipeline.pipeline import Pipeline
+from pipecat.pipeline.worker import PipelineParams, PipelineWorker
+from pipecat_chariot import ChariotTTSService
+
+tts = ChariotTTSService(
+    api_key=os.getenv("CHARIOT_API_KEY"),
+    settings=ChariotTTSService.Settings(
+        voice=os.getenv("CHARIOT_VOICE_ID"),
+    ),
+)
+
+pipeline = Pipeline(
+    [
+        transport.input(),
+        stt,
+        context_aggregator.user(),
+        llm,
+        tts,
+        transport.output(),
+        context_aggregator.assistant(),
+    ]
+)
+worker = PipelineWorker(pipeline, params=PipelineParams(allow_interruptions=True))
+```
+
+## Interruptions
+
+Chariot's WebSocket API supports neither context IDs nor a cancel message, so the
+service is built on `InterruptibleTTSService`. When the user barges in, the
+socket is closed, which stops server side generation immediately, and the next
+turn reconnects. Nothing needs configuring.
+
+## Compatibility
+
+Last tested with Pipecat v1.10.0 (`pipecat-ai>=1.7,<2`). See the
+[changelog](https://github.com/Chariot-AI/pipecat-chariot/blob/main/CHANGELOG.md)
+for updates.
