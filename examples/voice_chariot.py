@@ -4,25 +4,27 @@
 # SPDX-License-Identifier: MIT
 #
 
-"""A browser voice agent that speaks with a Chariot voice.
+"""A browser voice agent that listens and speaks with Chariot.
 
-Pipeline: browser microphone -> OpenAI STT -> OpenAI LLM -> Chariot TTS ->
-browser speakers, over WebRTC, with Silero VAD driving interruptions.
+Pipeline: browser microphone -> Chariot STT -> OpenAI LLM -> Chariot TTS ->
+browser speakers, over WebRTC, with Silero VAD driving turns and interruptions.
 
-Run it, open the printed URL, and talk. Interrupt it mid sentence and it stops
-immediately: Chariot's protocol has no cancel message, so the service closes
-the socket, which stops server side generation.
+Run it, open the printed URL, and talk, in English, Hindi or another Indian
+language. Interrupt it mid sentence and it stops immediately: the turn's
+Chariot context is cancelled and the connection stays open for the next one.
 
-Install:
-    uv pip install "pipecat-ai[openai,silero,webrtc,runner]" pipecat-chariot
+Install and run, from a clone of the repository:
+    uv run --extra example examples/voice_chariot.py
+
+Or in your own project:
+    uv add pipecat-chariot "pipecat-ai[openai,runner,silero,webrtc]"
 
 Environment (see .env.example):
     CHARIOT_API_KEY   required
     CHARIOT_VOICE_ID  optional, defaults to a Chariot stock voice
-    OPENAI_API_KEY    required, used for speech to text and the LLM
+    CHARIOT_LANGUAGE  optional speech language such as "hi"; detected when unset
+    OPENAI_API_KEY    required, used for the LLM
 
-Usage:
-    python examples/voice_chariot.py
 """
 
 import os
@@ -41,17 +43,17 @@ from pipecat.processors.aggregators.llm_response_universal import (
 from pipecat.runner.types import RunnerArguments
 from pipecat.runner.utils import create_transport
 from pipecat.services.openai.llm import OpenAILLMService
-from pipecat.services.openai.stt import OpenAISTTService
 from pipecat.transports.base_transport import BaseTransport, TransportParams
 from pipecat.workers.runner import WorkerRunner
 
-from pipecat_chariot import ChariotTTSService
+from pipecat_chariot import ChariotSTTService, ChariotTTSService
 
 load_dotenv(override=True)
 
 # Browser WebRTC, which the runner serves with a prebuilt UI, so the example
 # needs no third party account. ChariotTTSService itself is transport agnostic:
 # it sits between the LLM and transport.output() and never sees the transport.
+# The same holds for ChariotSTTService on the input side.
 # To demo another one, add its key here and install its extra, for example
 # "daily": lambda: DailyParams(...) with pipecat-ai[daily].
 transport_params = {
@@ -65,7 +67,13 @@ transport_params = {
 async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     logger.info("Starting bot")
 
-    stt = OpenAISTTService(api_key=os.environ["OPENAI_API_KEY"])
+    # Pipecat's VAD decides when the user has finished speaking, and the
+    # service asks Chariot to finalize the transcript right then. Leave the
+    # language unset to have it detected.
+    stt = ChariotSTTService(
+        api_key=os.environ["CHARIOT_API_KEY"],
+        settings=ChariotSTTService.Settings(language=os.getenv("CHARIOT_LANGUAGE") or None),
+    )
 
     # Voice UUIDs come from GET https://api.chariot.in/v1/voices. Any voice
     # speaks any supported language, so there is no language setting: the
@@ -79,9 +87,9 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         api_key=os.environ["OPENAI_API_KEY"],
         settings=OpenAILLMService.Settings(
             system_instruction=(
-                "You are a helpful assistant in a voice call. Keep replies "
-                "short. Your output is spoken aloud, so avoid bullet points, "
-                "markdown, and emojis."
+                "You are a helpful assistant in a voice call. Reply in the "
+                "language the user speaks. Keep replies short. Your output is "
+                "spoken aloud, so avoid bullet points, markdown, and emojis."
             ),
         ),
     )
