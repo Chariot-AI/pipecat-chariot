@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pipecat-chariot"
-version = "0.1.2"
-description = "Chariot text-to-speech for Pipecat"
+version = "0.2.0"
+description = "Chariot speech-to-text and text-to-speech for Pipecat"
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.11"
 authors = [{ name = "Chariot AI" }]
-keywords = ["pipecat", "chariot", "tts", "text-to-speech", "voice", "indian-languages"]
+keywords = ["pipecat", "chariot", "stt", "speech-to-text", "tts", "text-to-speech", "voice", "indian-languages"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -20,11 +20,16 @@ classifiers = [
     "Topic :: Multimedia :: Sound/Audio :: Speech",
 ]
 dependencies = [
-    "pipecat-ai>=1.7,<2",
+    "pipecat-ai>=1.13,<2",
     "websockets>=13.1",
 ]
 
 [project.optional-dependencies]
+# What examples/voice_chariot.py needs on top of the package: a browser WebRTC
+# transport with its runner, Silero VAD, and OpenAI for the LLM.
+example = [
+    "pipecat-ai[openai,runner,silero,webrtc]>=1.13,<2",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=1.0",
@@ -42,6 +47,8 @@ packages = ["src/pipecat_chariot"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 
 [tool.ruff]
