@@ -7,6 +7,8 @@ Chariot speech-to-text and text-to-speech for [Pipecat](https://github.com/pipec
 - `ChariotSTTService` streams the user's audio and returns interim and final transcripts.
 - `ChariotTTSService` streams speech back as 16-bit mono PCM while the server is still generating, and cancels a reply the moment the user interrupts, without reconnecting.
 
+**[Watch the demo](https://github.com/Chariot-AI/pipecat-chariot/releases/download/v0.2.0/chariot-pipecat-asr-tts-demo.mp4)**: a live browser conversation through Pipecat with Chariot speech-to-text and text-to-speech, in English and several Indian languages.
+
 This integration is built and maintained by Chariot, the company providing the service.
 
 ## Pipecat compatibility
